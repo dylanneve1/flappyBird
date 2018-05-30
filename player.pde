@@ -1,6 +1,6 @@
 class Player //Init Player
 {
-  float x = displayWidth/2; //Player X based on screen.
+  float x = displayWidth/4; //Player X based on screen.
   float y = displayHeight/3; //Player Y based on screen.
 
   float radius = displayWidth/8; //Player radius based on screen.
@@ -20,8 +20,10 @@ class Player //Init Player
 
   void show() //Shows the player on screen.
   {
+    imageMode(CENTER);
     fill(0); //Make Player white.
-    ellipse(x, y, radius, radius); //Draw Player.
+    //ellipse(x, y, radius, radius); //Draw Player.
+    image(ship, x, y, radius, radius);
   }
 
   void gravity() //Add gravity to Player.
@@ -46,7 +48,7 @@ class Player //Init Player
     {
       isBounce = true; //Declare Player is bouncing.
       y -= bounce; //Bounce is added to Y.
-      bounce -= displayHeight/1000; //Bounce speed is decreased over time.
+      bounce -= displayHeight/500; //Bounce speed is decreased over time.
       if(bounce <= 0) { //If the bounce arc is over.
         bouncing = false; //Player is no longer bouncing.
         isBounce = false; //Gravity resumes.
