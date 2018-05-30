@@ -50,19 +50,19 @@ class Player //Init Player
       isBounce = true; //Declare Player is bouncing.
       y -= bounce; //Bounce is added to Y.
       bounce -= displayHeight/500; //Bounce speed is decreased over time.
-      if(bounce <= 0) { //If the bounce arc is over.
+      if (bounce <= 0) { //If the bounce arc is over.
         bouncing = false; //Player is no longer bouncing.
         isBounce = false; //Gravity resumes.
         bounce = displayHeight/50; //Reset bounce value for next time.
       }
     }
   }
-  
+
   void restrict() //Stop player going out of bounds.
   {
-    if(y <= -1)
+    if (y <= -1)
     {
-      y = 0;
+      y = 0; //Y cannot be less than 0.
     }
   }
 }
