@@ -16,6 +16,7 @@ class Player //Init Player
     gravity(); //Calls funtion that adds gravity.
     reset();
     bounce(); //Let you stop the Player dying.
+    restrict(); //Call restrict function.
   }
 
   void show() //Shows the player on screen.
@@ -23,7 +24,7 @@ class Player //Init Player
     imageMode(CENTER);
     fill(0); //Make Player white.
     //ellipse(x, y, radius, radius); //Draw Player.
-    image(ship, x, y, radius, radius);
+    image(ship, x, y, radius*1.5, radius);
   }
 
   void gravity() //Add gravity to Player.
@@ -54,6 +55,14 @@ class Player //Init Player
         isBounce = false; //Gravity resumes.
         bounce = displayHeight/50; //Reset bounce value for next time.
       }
+    }
+  }
+  
+  void restrict() //Stop player going out of bounds.
+  {
+    if(y <= -1)
+    {
+      y = 0;
     }
   }
 }
