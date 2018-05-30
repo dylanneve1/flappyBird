@@ -3,7 +3,7 @@ class Player //Init Player
   float x = displayWidth/2; //Player X based on screen.
   float y = displayHeight/3; //Player Y based on screen.
 
-  float radius = displayWidth/5; //Player radius based on screen.
+  float radius = displayWidth/8; //Player radius based on screen.
 
   float gravity = displayHeight/150; //Gravity pulling Player down based on screen.
   float bounce = displayHeight/50;
