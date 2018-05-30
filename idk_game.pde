@@ -11,3 +11,8 @@ void draw()
   background(150); //Create background.
   p.caller(); //Call Player caller.
 }
+
+void mousePressed()
+{
+  p.bouncing = true;
+}
