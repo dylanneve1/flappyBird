@@ -5,10 +5,12 @@ class Obstacles
   float topY = 0;
   
   float oWidth = displayWidth/5;
-  float oHeight = displayHeight/3;
+  float topoHeight = displayHeight/3;
   
-  float bottomX;
-  float bottomY;
+  float botoHeight = displayHeight/3*-1;
+  
+  float bottomX = displayWidth*1.5;
+  float bottomY = displayHeight;
 
   //Obstacles()
   //{
@@ -28,7 +30,8 @@ class Obstacles
   void show()
   {
     fill(255);
-    rect(topX, topY, oWidth, oHeight);
+    rect(topX, topY, oWidth, topoHeight);
+    rect(bottomX, bottomY, oWidth, botoHeight);
   }
   
   void slide()
@@ -37,6 +40,11 @@ class Obstacles
     if(topX <= 0)
     {
       topX = displayWidth*1.5;
+    }
+    bottomX -= displayWidth/100;
+    if(bottomX <= 0)
+    {
+      bottomX = displayWidth*1.5;
     }
   }
 }
