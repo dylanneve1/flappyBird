@@ -19,7 +19,7 @@ void draw()
   m.caller(); //Call Player caller.
 }
 
-void mousePressed()
+void mousePressed() //If the mouse is pressed.
 {
-  p.bouncing = true;
+  p.bouncing = true; //Declare that ball is to bounce.
 }
