@@ -1,14 +1,19 @@
 class Obstacles
 {
 
+  float leftEdge;
+  float rightEdge;
+  float topBottomEdge;
+  float bottomTopEdge;
+
   float x = displayWidth*1.5;
   float topY = 0;
-  
+
   float oWidth = displayWidth/5;
   float topoHeight = displayHeight/3;
-  
+
   float botoHeight = displayHeight/3*-1;
-  
+
   float bottomY = displayHeight;
 
   //Obstacles()
@@ -24,21 +29,28 @@ class Obstacles
   {
     show();
     slide();
+    edgeDetect();
   }
-  
+
   void show()
   {
     fill(255);
     rect(x, topY, oWidth, topoHeight);
     rect(x, bottomY, oWidth, botoHeight);
   }
-  
+
   void slide()
   {
     x -= displayWidth/100;
-    if(x <= 0)
+    if (x <= 0)
     {
       x = displayWidth*1.5;
     }
+  }
+
+  void edgeDetect()
+  {
+    leftEdge = x;
+    rightEdge = x + oWidth;
   }
 }
