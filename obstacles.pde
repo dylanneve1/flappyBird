@@ -25,6 +25,7 @@ class Obstacles
   {
     fill(255);
     rect(x, topY, oWidth, topoHeight);
+    fill(255, 0, 0);
     rect(x, bottomY, oWidth, botoHeight*-1);
   }
 
@@ -34,8 +35,8 @@ class Obstacles
     if (x <= 0)
     {
       x = displayWidth*1.5;
-      topoHeight = random(0, displayHeight/2);
-      botoHeight = random(topoHeight+displayHeight/6, displayHeight);
+      topoHeight = random(0, displayHeight*0.8);
+      botoHeight = displayHeight - topoHeight - displayHeight*0.23;
     }
   }
 
