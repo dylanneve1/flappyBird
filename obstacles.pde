@@ -10,7 +10,7 @@ class Obstacles
   float oWidth = displayWidth/5;
   float topoHeight = displayHeight/3;
 
-  float botoHeight = displayHeight/3*-1;
+  float botoHeight = displayHeight/3;
 
   float bottomY = displayHeight;
 
@@ -25,7 +25,7 @@ class Obstacles
   {
     fill(255);
     rect(x, topY, oWidth, topoHeight);
-    rect(x, bottomY, oWidth, botoHeight);
+    rect(x, bottomY, oWidth, botoHeight*-1);
   }
 
   void slide()
@@ -34,6 +34,8 @@ class Obstacles
     if (x <= 0)
     {
       x = displayWidth*1.5;
+      topoHeight = random(0, displayHeight/2);
+      botoHeight = random(topoHeight+displayHeight/6, displayHeight);
     }
   }
 
