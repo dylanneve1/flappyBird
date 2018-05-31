@@ -16,8 +16,5 @@ class Modes //This class is for switching between menu/game etc.
     image(background, 0, 0, displayWidth, displayHeight); //Draw background image.
     p.caller(); //Call player entity.
     o.caller();
-    //for (int i = 0; i < o.length; i++) {
-    //  o[i].caller();
-    //}
   }
 }
