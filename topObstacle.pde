@@ -31,6 +31,7 @@ class topObstacle
     {
       x = displayWidth*1.5;
       h = random(0, displayHeight*0.8);
+      ready = true;
     }
   }
 
