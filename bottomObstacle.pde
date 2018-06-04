@@ -30,11 +30,6 @@ class bottomObstacle
     if (x <= 0)
     {
       x = displayWidth*1.5;
-      if (ready == true)
-      {
-        h = displayHeight - to.h - displayHeight*0.23;
-        ready = false;
-      }
     }
   }
 

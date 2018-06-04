@@ -6,8 +6,6 @@ topObstacle to;
 PImage background; //Create background PImage.
 PImage ship; //Create ship PImage.
 
-boolean ready = false;
-
 void setup()
 {
   ship = loadImage("ship.png");
