@@ -1,5 +1,6 @@
 Player p; //Import Player.
 Modes m; //Import modes.
+deathHandler dHandler;
 bottomObstacle bo;
 topObstacle to;
 
@@ -12,6 +13,7 @@ void setup()
   background = loadImage("nomnom.jpg"); //load background image.
   m = new Modes(); //Init imported modes.
   p = new Player(); //Init imported Player.
+  dHandler = new deathHandler();
   bo = new bottomObstacle();
   to = new topObstacle();
   size(displayWidth, displayHeight, P2D); //Set game resolution based on screen.

@@ -1,0 +1,7 @@
+class deathHandler
+{
+
+  void caller()
+  {
+  }
+}
