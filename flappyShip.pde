@@ -1,6 +1,7 @@
 Player p; //Import Player.
 Modes m; //Import modes.
-Obstacles o;
+bottomObstacle bo;
+topObstacle to;
 
 PImage background; //Create background PImage.
 PImage ship; //Create ship PImage.
@@ -11,7 +12,8 @@ void setup()
   background = loadImage("nomnom.jpg"); //load background image.
   m = new Modes(); //Init imported modes.
   p = new Player(); //Init imported Player.
-  o = new Obstacles();
+  bo = new bottomObstacle();
+  to = new topObstacle();
   size(displayWidth, displayHeight, P2D); //Set game resolution based on screen.
   orientation(PORTRAIT); //Force portrait.
 }
