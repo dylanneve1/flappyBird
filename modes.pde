@@ -1,5 +1,6 @@
 class Modes //This class is for switching between menu/game etc.
 {
+  boolean deathScreen = false;
   boolean playing = true; //If player playing?
 
   void caller()
@@ -7,6 +8,10 @@ class Modes //This class is for switching between menu/game etc.
     if (playing == true)
     {
       game(); //If player is playing then call game mode.
+    }
+    if (deathScreen == true)
+    {
+      deathScreenShow();
     }
   }
 
@@ -18,5 +23,9 @@ class Modes //This class is for switching between menu/game etc.
     dHandler.caller();
     bo.caller();
     to.caller();
+  }
+
+  void deathScreenShow()
+  {
   }
 }
