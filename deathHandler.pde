@@ -1,19 +1,19 @@
-class deathHandler
+class deathHandler //This class is for handling player deaths.
 {
 
-  boolean dead = false;
+  boolean dead = false; //Is player dead?
   
-  void caller()
+  void caller() //Call functions of class.
   {
     collisionDetect();
     stateChanger();
   }
 
-  void collisionDetect()
+  void collisionDetect() //Check if player has hit an obstacle.
   {
   }
 
-  void stateChanger()
+  void stateChanger() //Check if dead, if true stop playing.
   {
     if(dead == true)
     {

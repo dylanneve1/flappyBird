@@ -1,4 +1,4 @@
-class topObstacle
+class topObstacle //Class for top obstacle.
 {
 
   float leftEdge;
@@ -11,20 +11,20 @@ class topObstacle
 
   float y = 0;
 
-  void caller()
+  void caller() //Call funtions of class.
   {
     show();
     slide();
     edgeDetect();
   }
 
-  void show()
+  void show() //Draw top obstacle on screen.
   {
     fill(255);
     rect(x, y, w, h);
   }
 
-  void slide()
+  void slide() //Slide along screen left with bottom obstacle.
   {
     x -= displayWidth/100;
     if (x <= 0)
@@ -35,7 +35,7 @@ class topObstacle
     }
   }
 
-  void edgeDetect()
+  void edgeDetect() //Set a value for edges to make life simpler.
   {
     leftEdge = x;
     rightEdge = x + w;

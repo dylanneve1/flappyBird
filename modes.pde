@@ -1,6 +1,6 @@
 class Modes //This class is for switching between menu/game etc.
 {
-  boolean deathScreen = false;
+  boolean deathScreen = false; //Is player dead?
   boolean playing = true; //If player playing?
 
   void caller()
@@ -11,7 +11,7 @@ class Modes //This class is for switching between menu/game etc.
     }
     if (deathScreen == true)
     {
-      deathScreenShow();
+      deathScreenShow(); //If player is dead then call death screen.
     }
   }
 
@@ -20,12 +20,12 @@ class Modes //This class is for switching between menu/game etc.
     imageMode(CORNER); //Set image mode to corner.
     image(background, 0, 0, displayWidth, displayHeight); //Draw background image.
     p.caller(); //Call player entity.
-    dHandler.caller();
-    bo.caller();
-    to.caller();
+    dHandler.caller(); //Call death handler.
+    bo.caller(); //Call bottom obstacle.
+    to.caller(); //Call top obstacle.
   }
 
-  void deathScreenShow()
+  void deathScreenShow() //Death screen.
   {
   }
 }
