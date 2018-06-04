@@ -5,7 +5,7 @@ class bottomObstacle
   float rightEdge;
 
   float x = displayWidth*1.5;
-  float y = 0;
+  float y = displayHeight;
 
   float w = displayWidth/5;
 
@@ -21,7 +21,7 @@ class bottomObstacle
   void show()
   {
     fill(255);
-    rect(x, y, w, h);
+    rect(x, y, w, h*-1);
   }
 
   void slide()

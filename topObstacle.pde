@@ -9,7 +9,7 @@ class topObstacle
   float w = displayWidth/5;
   float h = displayHeight/3;
 
-  float y = displayHeight;
+  float y = 0;
 
   void caller()
   {
