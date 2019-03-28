@@ -10,6 +10,10 @@ class Bird {
   boolean isBounce = false;
   boolean bouncing = false;
   
+  boolean hasPassedThisRespawn = false;
+  
+  int score = 0;
+  
   void caller() {
     show();
     bounce();
@@ -20,6 +24,10 @@ class Bird {
     rectMode(CENTER);
     fill(#e57373);
     rect(x, y, 50, 50);
+    textMode(CENTER);
+    fill(255);
+    textSize(50);
+    text(score, 250, 100);
   }
   
   void gravity() //Add gravity to Player.

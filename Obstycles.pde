@@ -6,15 +6,15 @@ class Obstycles {
   float topBarY = 0;
   float bottomBarY = 500;
   
-  float topBarLength = 100;
-  float bottomBarLength = -100;
+  float topBarLength = 175;
+  float bottomBarLength = -175;
   float measurer = 0;
   
   void caller() {
     showTopBar();
     showBottomBar();
     move();
-    text(measurer, 250, 100);
+    //text(measurer, 250, 100);
   }
   
   void move() {
@@ -27,6 +27,7 @@ class Obstycles {
       bottomBarLength = random(-350, -50);
       measurer = 500 - (bottomBarLength * -1);
       topBarLength = measurer - 150;
+      b.hasPassedThisRespawn = false;
     }
   }
   
