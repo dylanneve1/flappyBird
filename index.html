@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Bot: Cyber Odyssey</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        #gameCanvas {
+            border: 2px solid #00d9ff;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="480" height="720"></canvas>
+    <script>
+"use strict";
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+
+// Audio
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+let soundEnabled = true;
+
+function initAudio() { 
+    if (!audioCtx) audioCtx = new AudioCtx(); 
+}
+
+function playTone(freq, dur, type, vol) {
+    type = type || 'sine';
+    vol = vol || 0.15;
+    if (!soundEnabled || !audioCtx) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+    } catch(e) {}
+}
+
+function sfxJump() { playTone(400, 0.08); setTimeout(function() { playTone(600, 0.06); }, 40); }
+function sfxScore() { playTone(523, 0.08); setTimeout(function() { playTone(659, 0.08); }, 60); setTimeout(function() { playTone(784, 0.1); }, 120); }
+function sfxCoin() { playTone(1200, 0.05); setTimeout(function() { playTone(1600, 0.08); }, 30); }
+function sfxPowerup() { for(var i=0;i<5;i++) setTimeout(function(j) { return function() { playTone(400+j*100, 0.08); }; }(i), i*40); }
+function sfxDeath() { playTone(200, 0.2, 'sawtooth'); setTimeout(function() { playTone(100, 0.3, 'sawtooth'); }, 100); }
+function sfxLevelUp() { [523, 659, 784, 1047].forEach(function(f, i) { setTimeout(function() { playTone(f, 0.15); }, i * 80); }); }
+function sfxAchievement() { [784, 988, 1175, 1319].forEach(function(f, i) { setTimeout(function() { playTone(f, 0.12); }, i * 60); }); }
+
+// Save System
+var defaultSave = {
+    coins: 0,
+    totalCoins: 0,
+    highScore: 0,
+    totalGames: 0,
+    totalPipes: 0,
+    totalDeaths: 0,
+    totalFlaps: 0,
+    playTime: 0,
+    currentSkin: 0,
+    unlockedSkins: [true, false, false, false, false, false, false, false],
+    achievements: [],
+    powerupLevels: { magnet: 1, shield: 1, slow: 1, tiny: 1, double: 1 },
+    worldsUnlocked: [true, false, false, false],
+    bossesDefeated: [false, false, false, false]
+};
+
+var save = null;
+try {
+    save = JSON.parse(localStorage.getItem('flappyBotSave'));
+} catch(e) {}
+if (!save) save = JSON.parse(JSON.stringify(defaultSave));
+
+function saveToDisk() { 
+    try {
+        localStorage.setItem('flappyBotSave', JSON.stringify(save)); 
+    } catch(e) {}
+}
+
+// Achievements
+var ACHIEVEMENTS = [
+    { id: 'first_flight', name: 'First Flight', desc: 'Play your first game', icon: '🚀' },
+    { id: 'score_10', name: 'Getting Started', desc: 'Score 10 points', icon: '⭐' },
+    { id: 'score_25', name: 'Rising Star', desc: 'Score 25 points', icon: '🌟' },
+    { id: 'score_50', name: 'Ace Pilot', desc: 'Score 50 points', icon: '✈️' },
+    { id: 'score_100', name: 'Legend', desc: 'Score 100 points', icon: '👑' },
+    { id: 'coins_100', name: 'Coin Collector', desc: 'Collect 100 total coins', icon: '💰' },
+    { id: 'games_10', name: 'Persistent', desc: 'Play 10 games', icon: '🎮' },
+    { id: 'flaps_1000', name: 'Flap Master', desc: 'Flap 1000 times', icon: '🦅' }
+];
+
+var achievementQueue = [];
+var showingAchievement = null;
+var achievementTimer = 0;
+
+function unlockAchievement(id) {
+    if (save.achievements.indexOf(id) >= 0) return;
+    save.achievements.push(id);
+    var ach = null;
+    for (var i = 0; i < ACHIEVEMENTS.length; i++) {
+        if (ACHIEVEMENTS[i].id === id) { ach = ACHIEVEMENTS[i]; break; }
+    }
+    if (ach) {
+        achievementQueue.push(ach);
+        sfxAchievement();
+    }
+    saveToDisk();
+}
+
+// Skins
+var SKINS = [
+    { name: 'Classic Bot', cost: 0, colors: ['#3a3a50', '#00d9ff', '#ff3366'] },
+    { name: 'Golden Bot', cost: 50, colors: ['#b8860b', '#ffd700', '#ff6b00'] },
+    { name: 'Neon Pink', cost: 75, colors: ['#2a2a3a', '#ff00ff', '#ff66ff'] },
+    { name: 'Matrix', cost: 100, colors: ['#0a2a0a', '#00ff00', '#88ff88'] },
+    { name: 'Fire Bot', cost: 150, colors: ['#3a1a1a', '#ff4500', '#ffaa00'] },
+    { name: 'Ice Bot', cost: 150, colors: ['#1a2a3a', '#00ffff', '#aaffff'] },
+    { name: 'Stealth', cost: 200, colors: ['#1a1a1a', '#333333', '#666666'] },
+    { name: 'Rainbow', cost: 500, colors: ['rainbow', 'rainbow', 'rainbow'] }
+];
+
+var frameCount = 0;
+
+function getSkinColors() {
+    var skin = SKINS[save.currentSkin];
+    if (skin.colors[0] === 'rainbow') {
+        var hue = (frameCount * 3) % 360;
+        return [
+            'hsl(' + hue + ', 50%, 30%)', 
+            'hsl(' + hue + ', 100%, 60%)', 
+            'hsl(' + ((hue+120)%360) + ', 100%, 50%)'
+        ];
+    }
+    return skin.colors;
+}
+
+// Worlds
+var WORLDS = [
+    { name: 'Cyber City', bgColors: ['#050510', '#0a0a20', '#101030'], pipeColor: '#1a4020', unlockScore: 0 },
+    { name: 'Neon District', bgColors: ['#1a0020', '#200030', '#300040'], pipeColor: '#4a1060', unlockScore: 25 },
+    { name: 'Ice Station', bgColors: ['#051520', '#0a2535', '#104050'], pipeColor: '#205060', unlockScore: 50 },
+    { name: 'Volcano Core', bgColors: ['#200a00', '#301505', '#401a0a'], pipeColor: '#602010', unlockScore: 100 }
+];
+
+var currentWorld = 0;
+
+// Game State
+var gameState = 'menu';
+var score = 0;
+var coins = 0;
+var coinsThisGame = 0;
+var combo = 0;
+var maxCombo = 0;
+var comboTimer = 0;
+var gameTime = 0;
+var sessionStartTime = 0;
+var difficulty = 1;
+var pipesPassed = 0;
+var flapsThisGame = 0;
+
+var menuSelection = 0;
+var menuOptions = ['Play', 'Shop', 'Achievements', 'Stats'];
+var shopTab = 0;
+var shopScroll = 0;
+
+// Robot
+var robot = {
+    x: 80, y: H / 2, w: 42, h: 34, vy: 0,
+    shield: 0, magnet: 0, slow: 0, tiny: 0, double: 0,
+    invuln: 0
+};
+
+var GRAVITY = 0.2;
+var JUMP = -5.2;
+var TERMINAL_VEL = 8;
+
+// Pipes, Coins, Powerups
+var pipes = [];
+var coinItems = [];
+var powerups = [];
+
+var PIPE_W = 56;
+var pipeGap = 200;
+var pipeSpeed = 1.2;
+var spawnInterval = 180;
+var spawnTimer = 0;
+
+var POWERUP_TYPES = [
+    { type: 'shield', color: '#00ff88', icon: '🛡️', duration: 300 },
+    { type: 'magnet', color: '#ffaa00', icon: '🧲', duration: 400 },
+    { type: 'slow', color: '#00aaff', icon: '⏱️', duration: 350 },
+    { type: 'tiny', color: '#ff00ff', icon: '🔬', duration: 300 },
+    { type: 'double', color: '#ffff00', icon: '2️⃣', duration: 250 }
+];
+
+// Particles (pooled)
+var particles = [];
+for (var i = 0; i < 50; i++) {
+    particles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 1, size: 2, color: '#fff' });
+}
+
+function spawnParticle(x, y, vx, vy, life, size, color) {
+    for (var i = 0; i < particles.length; i++) {
+        var p = particles[i];
+        if (!p.active) {
+            p.active = true;
+            p.x = x; p.y = y; p.vx = vx; p.vy = vy;
+            p.life = life; p.maxLife = life; p.size = size; p.color = color;
+            return;
+        }
+    }
+}
+
+function spawnParticleBurst(x, y, count, color) {
+    for (var i = 0; i < count; i++) {
+        var angle = Math.random() * Math.PI * 2;
+        var speed = 1 + Math.random() * 3;
+        spawnParticle(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 30 + Math.random() * 20, 2 + Math.random() * 3, color);
+    }
+}
+
+// Stars (pre-computed)
+var stars = [];
+for (var i = 0; i < 80; i++) {
+    stars.push({ x: Math.random() * W, y: Math.random() * H, size: 0.5 + Math.random() * 1.5, alpha: 0.3 + Math.random() * 0.5 });
+}
+
+// Drawing
+function drawBg() {
+    var world = WORLDS[currentWorld];
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, world.bgColors[0]);
+    g.addColorStop(0.5, world.bgColors[1]);
+    g.addColorStop(1, world.bgColors[2]);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    
+    ctx.fillStyle = '#fff';
+    for (var i = 0; i < stars.length; i++) {
+        var s = stars[i];
+        ctx.globalAlpha = s.alpha;
+        ctx.fillRect(s.x, s.y, s.size, s.size);
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawRobot() {
+    var r = robot;
+    var scale = r.tiny > 0 ? 0.6 : 1;
+    var colors = getSkinColors();
+    var rot = Math.min(Math.max(r.vy * 0.035, -0.3), 0.6);
+    
+    if (r.invuln > 0 && Math.floor(frameCount / 3) % 2 === 0) return;
+    
+    ctx.save();
+    ctx.translate(r.x + r.w * scale / 2, r.y + r.h * scale / 2);
+    ctx.rotate(rot);
+    ctx.scale(scale, scale);
+    
+    // Thruster
+    if (gameState === 'playing') {
+        var flameH = r.vy < 0 ? 18 : 8;
+        ctx.fillStyle = colors[1];
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-5, r.h / 2);
+        ctx.lineTo(0, r.h / 2 + flameH + Math.random() * 4);
+        ctx.lineTo(5, r.h / 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+    
+    // Body
+    ctx.fillStyle = colors[0];
+    ctx.fillRect(-r.w / 2, -r.h / 2, r.w, r.h);
+    ctx.strokeStyle = colors[1];
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-r.w / 2, -r.h / 2, r.w, r.h);
+    
+    // Face
+    ctx.fillStyle = '#0a0a15';
+    ctx.fillRect(-r.w / 2 + 4, -r.h / 2 + 4, r.w - 8, r.h / 2 - 2);
+    
+    // Eyes
+    ctx.fillStyle = colors[1];
+    ctx.beginPath();
+    ctx.arc(-7, -r.h / 4 + 3, 4, 0, Math.PI * 2);
+    ctx.arc(7, -r.h / 4 + 3, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Antenna
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -r.h / 2);
+    ctx.lineTo(0, -r.h / 2 - 8);
+    ctx.stroke();
+    ctx.fillStyle = colors[2];
+    ctx.beginPath();
+    ctx.arc(0, -r.h / 2 - 10, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Shield effect
+    if (r.shield > 0) {
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.5 + Math.sin(frameCount * 0.2) * 0.3;
+        ctx.beginPath();
+        ctx.arc(0, 0, r.w * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+    
+    ctx.restore();
+}
+
+function drawPipe(p) {
+    var world = WORLDS[currentWorld];
+    var baseColor = world.pipeColor;
+    
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(p.x, 0, PIPE_W, p.top);
+    ctx.fillRect(p.x - 4, p.top - 18, PIPE_W + 8, 18);
+    
+    var botY = p.top + pipeGap;
+    ctx.fillRect(p.x, botY, PIPE_W, H - botY);
+    ctx.fillRect(p.x - 4, botY, PIPE_W + 8, 18);
+}
+
+function drawCoin(c) {
+    var pulse = 1 + Math.sin(frameCount * 0.15 + c.x) * 0.1;
+    ctx.fillStyle = '#ffdd00';
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 8 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#aa9900';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('$', c.x, c.y);
+}
+
+function drawPowerup(p) {
+    var type = null;
+    for (var i = 0; i < POWERUP_TYPES.length; i++) {
+        if (POWERUP_TYPES[i].type === p.type) { type = POWERUP_TYPES[i]; break; }
+    }
+    if (!type) return;
+    
+    var pulse = 1 + Math.sin(frameCount * 0.1) * 0.15;
+    
+    ctx.fillStyle = type.color;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 18 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    ctx.fillStyle = type.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(type.icon, p.x, p.y);
+}
+
+function drawParticles() {
+    for (var i = 0; i < particles.length; i++) {
+        var p = particles[i];
+        if (!p.active) continue;
+        var alpha = p.life / p.maxLife;
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = alpha;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawHUD() {
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(score, W / 2, 45);
+    
+    if (combo > 1) {
+        ctx.fillStyle = '#ffdd00';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText(combo + 'x COMBO!', W / 2, 75);
+    }
+    
+    ctx.fillStyle = '#ffdd00';
+    ctx.font = '18px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('💰 ' + coins, 15, 30);
+    
+    var py = 55;
+    if (robot.shield > 0) { ctx.fillText('🛡️ ' + Math.ceil(robot.shield / 60) + 's', 15, py); py += 22; }
+    if (robot.magnet > 0) { ctx.fillText('🧲 ' + Math.ceil(robot.magnet / 60) + 's', 15, py); py += 22; }
+    if (robot.slow > 0) { ctx.fillText('⏱️ ' + Math.ceil(robot.slow / 60) + 's', 15, py); py += 22; }
+    if (robot.tiny > 0) { ctx.fillText('🔬 ' + Math.ceil(robot.tiny / 60) + 's', 15, py); py += 22; }
+    if (robot.double > 0) { ctx.fillText('2️⃣ ' + Math.ceil(robot.double / 60) + 's', 15, py); py += 22; }
+    
+    ctx.fillStyle = '#888';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('🌍 ' + WORLDS[currentWorld].name, W - 10, 25);
+    ctx.font = '20px sans-serif';
+    ctx.fillText(soundEnabled ? '🔊' : '🔇', W - 20, 55);
+}
+
+function drawAchievementPopup() {
+    if (!showingAchievement) {
+        if (achievementQueue.length > 0) {
+            showingAchievement = achievementQueue.shift();
+            achievementTimer = 180;
+        }
+        return;
+    }
+    
+    achievementTimer--;
+    if (achievementTimer <= 0) {
+        showingAchievement = null;
+        return;
+    }
+    
+    var y;
+    if (achievementTimer > 150) y = H + 60 - (180 - achievementTimer) * 4;
+    else if (achievementTimer < 30) y = H - 60 + (30 - achievementTimer) * 4;
+    else y = H - 60;
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    ctx.fillRect(W / 2 - 120, y - 30, 240, 60);
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(W / 2 - 120, y - 30, 240, 60);
+    
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🏆 ACHIEVEMENT!', W / 2, y - 10);
+    ctx.fillStyle = '#fff';
+    ctx.font = '16px sans-serif';
+    ctx.fillText(showingAchievement.icon + ' ' + showingAchievement.name, W / 2, y + 12);
+}
+
+function drawMenu() {
+    drawBg();
+    
+    ctx.fillStyle = '#00d9ff';
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('FLAPPY BOT', W / 2, 80);
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText('CYBER ODYSSEY', W / 2, 100);
+    
+    var bobY = Math.sin(frameCount * 0.05) * 10;
+    ctx.font = '50px sans-serif';
+    ctx.fillText('🤖', W / 2 - 25, 170 + bobY);
+    
+    for (var i = 0; i < menuOptions.length; i++) {
+        var y = 260 + i * 55;
+        var selected = menuSelection === i;
+        
+        if (selected) {
+            ctx.fillStyle = 'rgba(0, 217, 255, 0.2)';
+            ctx.fillRect(W / 2 - 100, y - 18, 200, 36);
+        }
+        
+        ctx.fillStyle = selected ? '#00d9ff' : '#fff';
+        ctx.font = selected ? 'bold 22px sans-serif' : '20px sans-serif';
+        ctx.fillText(menuOptions[i], W / 2, y + 7);
+    }
+    
+    ctx.fillStyle = '#666';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('High Score: ' + save.highScore + ' | Coins: ' + save.coins, W / 2, H - 40);
+    ctx.fillStyle = '#444';
+    ctx.fillText('↑/↓ to navigate • SPACE to select', W / 2, H - 20);
+}
+
+function drawShop() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, W, H);
+    
+    // Back button (mobile friendly)
+    ctx.fillStyle = '#ff3366';
+    ctx.fillRect(15, 15, 80, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('← BACK', 55, 42);
+    
+    ctx.fillStyle = '#00d9ff';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText('🛒 SHOP', W / 2, 40);
+    
+    ctx.fillStyle = '#ffdd00';
+    ctx.font = '18px sans-serif';
+    ctx.fillText('💰 ' + save.coins, W / 2, 70);
+    
+    // Tabs
+    var tabs = ['SKINS', 'POWERUPS'];
+    for (var t = 0; t < tabs.length; t++) {
+        var tx = W / 4 + t * W / 2;
+        ctx.fillStyle = shopTab === t ? '#00d9ff' : '#444';
+        ctx.font = shopTab === t ? 'bold 16px sans-serif' : '16px sans-serif';
+        ctx.fillText(tabs[t], tx, 105);
+    }
+    
+    if (shopTab === 0) {
+        // Skins
+        for (var i = 0; i < SKINS.length; i++) {
+            var y = 130 + i * 50 - shopScroll;
+            if (y < 90 || y > H - 70) continue;
+            
+            var skin = SKINS[i];
+            var owned = save.unlockedSkins[i];
+            var equipped = save.currentSkin === i;
+            
+            ctx.fillStyle = equipped ? 'rgba(0, 217, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(30, y, W - 60, 42);
+            
+            var colors = skin.colors[0] === 'rainbow' ? ['#ff0000', '#00ff00', '#0000ff'] : skin.colors;
+            for (var j = 0; j < colors.length; j++) {
+                ctx.fillStyle = colors[j];
+                ctx.fillRect(45 + j * 22, y + 8, 18, 26);
+            }
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(skin.name, 120, y + 26);
+            
+            ctx.textAlign = 'right';
+            if (equipped) {
+                ctx.fillStyle = '#00ff88';
+                ctx.fillText('EQUIPPED', W - 45, y + 26);
+            } else if (owned) {
+                ctx.fillStyle = '#888';
+                ctx.fillText('TAP', W - 45, y + 26);
+            } else {
+                ctx.fillStyle = '#ffdd00';
+                ctx.fillText(skin.cost + ' 💰', W - 45, y + 26);
+            }
+        }
+    } else {
+        // Powerups
+        for (var i = 0; i < POWERUP_TYPES.length; i++) {
+            var y = 130 + i * 55;
+            var pu = POWERUP_TYPES[i];
+            var level = save.powerupLevels[pu.type];
+            var cost = (level + 1) * 25;
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(30, y, W - 60, 48);
+            
+            ctx.font = '24px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(pu.icon, 45, y + 33);
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px sans-serif';
+            ctx.fillText(pu.type.toUpperCase() + ' (Lv.' + level + ')', 85, y + 22);
+            ctx.fillStyle = '#888';
+            ctx.font = '11px sans-serif';
+            ctx.fillText('+' + (level * 20) + '% duration', 85, y + 40);
+            
+            ctx.textAlign = 'right';
+            if (level < 5) {
+                ctx.fillStyle = '#ffdd00';
+                ctx.font = '14px sans-serif';
+                ctx.fillText(cost + ' 💰', W - 45, y + 30);
+            } else {
+                ctx.fillStyle = '#00ff88';
+                ctx.fillText('MAX', W - 45, y + 30);
+            }
+        }
+    }
+}
+
+function drawAchievementsScreen() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, W, H);
+    
+    // Back button (mobile friendly)
+    ctx.fillStyle = '#ff3366';
+    ctx.fillRect(15, 15, 80, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('← BACK', 55, 42);
+    
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText('🏆 ACHIEVEMENTS', W / 2, 40);
+    
+    ctx.fillStyle = '#888';
+    ctx.font = '14px sans-serif';
+    ctx.fillText(save.achievements.length + '/' + ACHIEVEMENTS.length + ' unlocked', W / 2, 65);
+    
+    for (var i = 0; i < ACHIEVEMENTS.length; i++) {
+        var y = 95 + i * 45;
+        if (y > H - 50) break;
+        
+        var ach = ACHIEVEMENTS[i];
+        var unlocked = save.achievements.indexOf(ach.id) >= 0;
+        
+        ctx.fillStyle = unlocked ? 'rgba(255, 215, 0, 0.1)' : 'rgba(255, 255, 255, 0.03)';
+        ctx.fillRect(20, y, W - 40, 40);
+        
+        ctx.font = '20px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(unlocked ? ach.icon : '🔒', 35, y + 28);
+        
+        ctx.fillStyle = unlocked ? '#fff' : '#555';
+        ctx.font = '13px sans-serif';
+        ctx.fillText(ach.name, 70, y + 20);
+        ctx.fillStyle = unlocked ? '#888' : '#333';
+        ctx.font = '11px sans-serif';
+        ctx.fillText(ach.desc, 70, y + 35);
+    }
+    
+    ctx.fillStyle = '#ff3366';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    
+}
+
+function drawStats() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, W, H);
+    
+    // Back button (mobile friendly)
+    ctx.fillStyle = '#ff3366';
+    ctx.fillRect(15, 15, 80, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('← BACK', 55, 42);
+    
+    ctx.fillStyle = '#00d9ff';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText('📊 STATISTICS', W / 2, 40);
+    
+    var stats = [
+        ['High Score', save.highScore],
+        ['Total Games', save.totalGames],
+        ['Total Coins', save.totalCoins],
+        ['Pipes Passed', save.totalPipes],
+        ['Total Deaths', save.totalDeaths],
+        ['Total Flaps', save.totalFlaps]
+    ];
+    
+    for (var i = 0; i < stats.length; i++) {
+        var y = 90 + i * 50;
+        ctx.fillStyle = '#555';
+        ctx.font = '13px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(stats[i][0], 50, y);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(stats[i][1], W - 50, y);
+    }
+    
+    ctx.fillStyle = '#ff3366';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    
+}
+
+function drawDeath() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, W, H);
+    
+    ctx.fillStyle = '#ff3366';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', W / 2, H / 2 - 100);
+    
+    ctx.fillStyle = '#00d9ff';
+    ctx.font = 'bold 60px sans-serif';
+    ctx.fillText(score, W / 2, H / 2 - 30);
+    
+    if (score >= save.highScore && score > 0) {
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('🏆 NEW HIGH SCORE!', W / 2, H / 2 + 10);
+    }
+    
+    ctx.fillStyle = '#888';
+    ctx.font = '16px sans-serif';
+    ctx.fillText('Best: ' + save.highScore, W / 2, H / 2 + 40);
+    ctx.fillText('Coins: +' + coinsThisGame, W / 2, H / 2 + 65);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px sans-serif';
+    ctx.fillText('Tap to Continue', W / 2, H / 2 + 120);
+}
+
+// Game Logic
+function jump() {
+    initAudio();
+    
+    if (gameState === 'menu') {
+        if (menuSelection === 0) startGame();
+        else if (menuSelection === 1) gameState = 'shop';
+        else if (menuSelection === 2) gameState = 'achievements';
+        else if (menuSelection === 3) gameState = 'stats';
+        return;
+    }
+    
+    if (gameState === 'shop' || gameState === 'achievements' || gameState === 'stats') {
+        return;
+    }
+    
+    if (gameState === 'playing') {
+        robot.vy = JUMP;
+        flapsThisGame++;
+        save.totalFlaps++;
+        sfxJump();
+        spawnParticleBurst(robot.x, robot.y + robot.h, 5, getSkinColors()[1]);
+    }
+    
+    if (gameState === 'dead') {
+        gameState = 'menu';
+    }
+}
+
+function startGame() {
+    gameState = 'playing';
+    score = 0;
+    coins = 0;
+    coinsThisGame = 0;
+    combo = 0;
+    maxCombo = 0;
+    comboTimer = 0;
+    pipesPassed = 0;
+    flapsThisGame = 0;
+    difficulty = 1;
+    
+    robot.y = H / 2;
+    robot.vy = 0;
+    robot.shield = 0;
+    robot.magnet = 0;
+    robot.slow = 0;
+    robot.tiny = 0;
+    robot.double = 0;
+    robot.invuln = 60;
+    
+    pipes = [];
+    coinItems = [];
+    powerups = [];
+    
+    pipeGap = 200;
+    pipeSpeed = 1.2;
+    spawnInterval = 180;
+    spawnTimer = 80;
+    gameTime = 0;
+    sessionStartTime = Date.now();
+    
+    save.totalGames++;
+    unlockAchievement('first_flight');
+    
+    sfxJump();
+}
+
+function die() {
+    if (robot.shield > 0 || robot.invuln > 0) return;
+    
+    gameState = 'dead';
+    save.totalDeaths++;
+    save.coins += coinsThisGame;
+    save.playTime += Math.floor((Date.now() - sessionStartTime) / 1000);
+    
+    if (score > save.highScore) {
+        save.highScore = score;
+    }
+    
+    if (score >= 10) unlockAchievement('score_10');
+    if (score >= 25) unlockAchievement('score_25');
+    if (score >= 50) unlockAchievement('score_50');
+    if (score >= 100) unlockAchievement('score_100');
+    if (save.totalCoins >= 100) unlockAchievement('coins_100');
+    if (save.totalGames >= 10) unlockAchievement('games_10');
+    if (save.totalFlaps >= 1000) unlockAchievement('flaps_1000');
+    
+    // Unlock worlds
+    for (var i = 0; i < WORLDS.length; i++) {
+        if (score >= WORLDS[i].unlockScore && !save.worldsUnlocked[i]) {
+            save.worldsUnlocked[i] = true;
+        }
+    }
+    
+    saveToDisk();
+    sfxDeath();
+    spawnParticleBurst(robot.x + robot.w / 2, robot.y + robot.h / 2, 30, '#ff3366');
+}
+
+function update() {
+    frameCount++;
+    
+    // Update particles
+    for (var i = 0; i < particles.length; i++) {
+        var p = particles[i];
+        if (!p.active) continue;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.1;
+        p.life--;
+        if (p.life <= 0) p.active = false;
+    }
+    
+    if (gameState !== 'playing') return;
+    
+    gameTime++;
+    
+    // Robot physics
+    var gravity = robot.slow > 0 ? GRAVITY * 0.6 : GRAVITY;
+    robot.vy += gravity;
+    robot.vy = Math.max(Math.min(robot.vy, TERMINAL_VEL), -TERMINAL_VEL);
+    robot.y += robot.vy;
+    
+    // Powerup timers
+    if (robot.shield > 0) robot.shield--;
+    if (robot.magnet > 0) robot.magnet--;
+    if (robot.slow > 0) robot.slow--;
+    if (robot.tiny > 0) robot.tiny--;
+    if (robot.double > 0) robot.double--;
+    if (robot.invuln > 0) robot.invuln--;
+    
+    // Combo timer
+    if (comboTimer > 0) {
+        comboTimer--;
+        if (comboTimer === 0) combo = 0;
+    }
+    
+    var speed = robot.slow > 0 ? pipeSpeed * 0.6 : pipeSpeed;
+    
+    // Spawn pipes
+    spawnTimer++;
+    if (spawnTimer >= spawnInterval) {
+        var minTop = 50, maxTop = H - pipeGap - 50;
+        var top = Math.random() * (maxTop - minTop) + minTop;
+        pipes.push({ x: W, top: top, passed: false });
+        
+        // Spawn coins
+        var coinCount = 1 + Math.floor(Math.random() * 3);
+        for (var ci = 0; ci < coinCount; ci++) {
+            coinItems.push({
+                x: W + PIPE_W / 2 + Math.random() * 30 - 15,
+                y: top + pipeGap / 2 + (Math.random() - 0.5) * (pipeGap - 40)
+            });
+        }
+        
+        // Spawn powerups (rare)
+        if (Math.random() < 0.08) {
+            var type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+            powerups.push({
+                x: W + PIPE_W / 2,
+                y: top + pipeGap / 2,
+                type: type.type
+            });
+        }
+        
+        spawnTimer = 0;
+    }
+    
+    // Update pipes
+    for (var pi = pipes.length - 1; pi >= 0; pi--) {
+        var pipe = pipes[pi];
+        pipe.x -= speed;
+        
+        // Score
+        if (!pipe.passed && pipe.x + PIPE_W < robot.x) {
+            pipe.passed = true;
+            score += robot.double > 0 ? 2 : 1;
+            pipesPassed++;
+            save.totalPipes++;
+            
+            combo++;
+            comboTimer = 90;
+            if (combo > maxCombo) maxCombo = combo;
+            
+            sfxScore();
+            spawnParticleBurst(robot.x + robot.w, robot.y + robot.h / 2, 8, '#00ff88');
+            
+            // Difficulty (slower progression)
+            if (pipesPassed % 12 === 0 && difficulty < 5) {
+                difficulty++;
+                pipeSpeed = Math.min(pipeSpeed + 0.08, 2.5);
+                pipeGap = Math.max(pipeGap - 3, 160);
+                spawnInterval = Math.max(spawnInterval - 5, 120);
+                sfxLevelUp();
+            }
+        }
+        
+        // Collision
+        if (robot.shield <= 0 && robot.invuln <= 0) {
+            var scale = robot.tiny > 0 ? 0.6 : 1;
+            var rw = robot.w * scale, rh = robot.h * scale;
+            var pad = 8;  // More forgiving hitbox
+            
+            if (robot.x + rw - pad > pipe.x && robot.x + pad < pipe.x + PIPE_W) {
+                if (robot.y + pad < pipe.top || robot.y + rh - pad > pipe.top + pipeGap) {
+                    die();
+                    return;
+                }
+            }
+        }
+        
+        if (pipe.x + PIPE_W < 0) pipes.splice(pi, 1);
+    }
+    
+    // Update coins
+    var magnetRange = robot.magnet > 0 ? 100 : 30;
+    for (var ci = coinItems.length - 1; ci >= 0; ci--) {
+        var c = coinItems[ci];
+        c.x -= speed;
+        
+        // Magnet effect
+        if (robot.magnet > 0) {
+            var dx = (robot.x + robot.w / 2) - c.x;
+            var dy = (robot.y + robot.h / 2) - c.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < magnetRange && dist > 0) {
+                c.x += dx / dist * 4;
+                c.y += dy / dist * 4;
+            }
+        }
+        
+        // Collection
+        var cdx = (robot.x + robot.w / 2) - c.x;
+        var cdy = (robot.y + robot.h / 2) - c.y;
+        if (Math.sqrt(cdx * cdx + cdy * cdy) < 25) {
+            var coinValue = robot.double > 0 ? 2 : 1;
+            coins += coinValue;
+            coinsThisGame += coinValue;
+            save.totalCoins += coinValue;
+            coinItems.splice(ci, 1);
+            sfxCoin();
+            spawnParticleBurst(c.x, c.y, 6, '#ffdd00');
+            continue;
+        }
+        
+        if (c.x < -20) coinItems.splice(ci, 1);
+    }
+    
+    // Update powerups
+    for (var pui = powerups.length - 1; pui >= 0; pui--) {
+        var pu = powerups[pui];
+        pu.x -= speed;
+        
+        var pdx = (robot.x + robot.w / 2) - pu.x;
+        var pdy = (robot.y + robot.h / 2) - pu.y;
+        if (Math.sqrt(pdx * pdx + pdy * pdy) < 30) {
+            var type = null;
+            for (var ti = 0; ti < POWERUP_TYPES.length; ti++) {
+                if (POWERUP_TYPES[ti].type === pu.type) { type = POWERUP_TYPES[ti]; break; }
+            }
+            if (type) {
+                var bonus = save.powerupLevels[pu.type] * 0.2;
+                var duration = Math.floor(type.duration * (1 + bonus));
+                robot[pu.type] = duration;
+                sfxPowerup();
+                spawnParticleBurst(pu.x, pu.y, 15, type.color);
+            }
+            powerups.splice(pui, 1);
+            continue;
+        }
+        
+        if (pu.x < -20) powerups.splice(pui, 1);
+    }
+    
+    // Boundaries
+    if (robot.y < 0 || robot.y + robot.h > H) die();
+}
+
+// Input
+document.addEventListener('keydown', function(e) {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+        e.preventDefault();
+        jump();
+    }
+    
+    if (gameState === 'menu') {
+        if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+            menuSelection = (menuSelection + 1) % menuOptions.length;
+        }
+        if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+            menuSelection = (menuSelection - 1 + menuOptions.length) % menuOptions.length;
+        }
+        if (e.code === 'Enter') jump();
+    }
+    
+    if (gameState === 'shop' || gameState === 'achievements' || gameState === 'stats') {
+        if (e.code === 'Escape') gameState = 'menu';
+    }
+    
+    if (gameState === 'shop') {
+        if (e.code === 'ArrowDown') shopScroll = Math.min(shopScroll + 40, 200);
+        if (e.code === 'ArrowUp') shopScroll = Math.max(shopScroll - 40, 0);
+    }
+    
+    if (e.code === 'KeyM') soundEnabled = !soundEnabled;
+});
+
+canvas.addEventListener('click', function(e) {
+    var rect = canvas.getBoundingClientRect();
+    var x = (e.clientX - rect.left) * (W / rect.width);
+    var y = (e.clientY - rect.top) * (H / rect.height);
+    
+    if (gameState === 'menu') {
+        for (var i = 0; i < menuOptions.length; i++) {
+            var optY = 260 + i * 55;
+            if (x > W / 2 - 100 && x < W / 2 + 100 && y > optY - 20 && y < optY + 20) {
+                menuSelection = i;
+                jump();
+                return;
+            }
+        }
+        return;
+    }
+    
+    if (gameState === 'shop') {
+        // Back button
+        if (x > 15 && x < 95 && y > 15 && y < 55) {
+            gameState = 'menu';
+            return;
+        }
+        // Tab clicks
+        if (y > 85 && y < 120) {
+            if (x < W / 2) shopTab = 0;
+            else shopTab = 1;
+            return;
+        }
+        // Powerup purchases
+        if (shopTab === 1) {
+            for (var pi = 0; pi < POWERUP_TYPES.length; pi++) {
+                var puY = 130 + pi * 55;
+                if (y > puY && y < puY + 48 && x > 30 && x < W - 30) {
+                    var pu = POWERUP_TYPES[pi];
+                    var level = save.powerupLevels[pu.type];
+                    var cost = (level + 1) * 25;
+                    if (level < 5 && save.coins >= cost) {
+                        save.coins -= cost;
+                        save.powerupLevels[pu.type]++;
+                        saveToDisk();
+                        sfxPowerup();
+                    }
+                    return;
+                }
+            }
+            return;
+        }
+        for (var i = 0; i < SKINS.length; i++) {
+            var itemY = 130 + i * 50 - shopScroll;
+            if (y > itemY && y < itemY + 42 && x > 30 && x < W - 30) {
+                var skin = SKINS[i];
+                if (save.unlockedSkins[i]) {
+                    save.currentSkin = i;
+                    saveToDisk();
+                } else if (save.coins >= skin.cost) {
+                    save.coins -= skin.cost;
+                    save.unlockedSkins[i] = true;
+                    save.currentSkin = i;
+                    saveToDisk();
+                    sfxPowerup();
+                }
+                return;
+            }
+        }
+        return;
+    }
+    
+    // Back button for achievements and stats
+    if (gameState === 'achievements' || gameState === 'stats') {
+        if (x > 15 && x < 95 && y > 15 && y < 55) {
+            gameState = 'menu';
+            return;
+        }
+        return;
+    }
+    
+    // Sound toggle
+    if (gameState === 'playing') {
+        if (x > W - 50 && y > 35 && y < 70) {
+            soundEnabled = !soundEnabled;
+            return;
+        }
+    }
+    
+    jump();
+});
+
+canvas.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    var touch = e.touches[0];
+    var rect = canvas.getBoundingClientRect();
+    var x = (touch.clientX - rect.left) * (W / rect.width);
+    var y = (touch.clientY - rect.top) * (H / rect.height);
+    
+    // Create synthetic click
+    var evt = { clientX: touch.clientX, clientY: touch.clientY };
+    canvas.dispatchEvent(new MouseEvent('click', evt));
+});
+
+// Main Loop
+function render() {
+    if (gameState === 'menu') {
+        drawMenu();
+    } else if (gameState === 'shop') {
+        drawShop();
+    } else if (gameState === 'achievements') {
+        drawAchievementsScreen();
+    } else if (gameState === 'stats') {
+        drawStats();
+    } else if (gameState === 'playing') {
+        drawBg();
+        for (var i = 0; i < pipes.length; i++) drawPipe(pipes[i]);
+        for (var i = 0; i < coinItems.length; i++) drawCoin(coinItems[i]);
+        for (var i = 0; i < powerups.length; i++) drawPowerup(powerups[i]);
+        drawRobot();
+        drawParticles();
+        drawHUD();
+    } else if (gameState === 'dead') {
+        drawBg();
+        for (var i = 0; i < pipes.length; i++) drawPipe(pipes[i]);
+        drawRobot();
+        drawParticles();
+        drawDeath();
+    }
+    
+    drawAchievementPopup();
+}
+
+function loop() {
+    update();
+    render();
+    requestAnimationFrame(loop);
+}
+
+loop();
+    </script>
+</body>
+</html>
